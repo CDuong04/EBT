@@ -9,14 +9,15 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # append parent dir
 
-from data.nlp.fineweb_dataloader import FineWebDataset
+from data.nlp.fineweb_streaming_dataloader import FineWebStreamingDataset
 from data.nlp.collator import NLP_HF_Collator
 from model.nlp.baseline_transformer import Baseline_Transformer_NLP
 from model.nlp.ebt import EBT_NLP
 
 ########################################################################################################################
 
-# NOTE IMPORTANT this code is not to reproduce results because it doesnt have all features (LR scheduler, correct wd on all params, etc); it is just a proof of concept for how things work. results are far from exact; it is recommended to use the whole codebase 
+# NOTE IMPORTANT this code is not to reproduce results because it doesnt have all features (LR scheduler, correct wd on all params, etc); it is just a proof of concept for how things work. results are far from exact; it is recommended to use the whole codebase
+# This version uses STREAMING mode - downloads sample-100BT (100B tokens) on-the-fly with NO storage needed!
 
 ########################################################################################################################
 
@@ -31,7 +32,7 @@ class ModelWrapper(pl.LightningModule):
         }[self.hparams.model_name]
 
         self.model = model_cls(self.hparams)
-        self.dataset = FineWebDataset(self.hparams)
+        self.dataset = FineWebStreamingDataset(self.hparams)
         self.collate_fn = NLP_HF_Collator(self.hparams)
 
     def training_step(self, batch, batch_idx):
@@ -45,28 +46,29 @@ class ModelWrapper(pl.LightningModule):
 
     def train_dataloader(self):
         workers = torch.cuda.device_count() * self.hparams.num_workers_per_gpu
+        # For streaming datasets, use persistent_workers for better performance
         return DataLoader(
             self.dataset,
             batch_size=self.hparams.batch_size_per_device,
-            shuffle=True,
             num_workers=workers,
             collate_fn=self.collate_fn,
+            persistent_workers=True if workers > 0 else False,
+            prefetch_factor=4 if workers > 0 else None,  # Prefetch for streaming
         )
 
 def main():
     hparams = dict(
         # optimisation
         lr=1e-3,
-        batch_size_per_device=32,
-        num_workers_per_gpu=12,
-        num_workers=12,
-        num_gpus=1,
+        batch_size_per_device=8,  # Reduced from 32 to fit in GPU memory
+        num_workers_per_gpu=4,  # Fewer workers for streaming to avoid overwhelming network
         max_steps=100000,
         # data
         dataset_dir="",
         dataset_name="fineweb",
         context_length=256,
-        pretokenize_dataset=True,
+        pretokenize_dataset=True,  # Streaming dataset returns pre-tokenized data
+        streaming_buffer_size=10000,  # Buffer size for shuffling
         tokenizer="EleutherAI/gpt-neox-20b",
         # model choice
         model_name="ebt",  # "baseline_transformer" or "ebt"
@@ -82,9 +84,9 @@ def main():
         debug_unused_parameters=False
     )
 
-    ebt_params = dict( #NOTE 
+    ebt_params = dict( #NOTE
         mcmc_step_size=500.0,
-        mcmc_step_size_lr_multiplier=1500.0, 
+        mcmc_step_size_lr_multiplier=1500.0,
         mcmc_num_steps=2,
         ebt_type="time_embed",
         normalize_initial_condition=True,
@@ -123,7 +125,7 @@ def main():
 
     model = ModelWrapper(hparams)
     logger = WandbLogger(
-        name="minimal_wrapper_run", project="nlp_pretrain_minimal", entity=""
+        name="minimal_wrapper_run_streaming", project="nlp_pretrain_minimal", entity=""
     )
 
     trainer = pl.Trainer(
