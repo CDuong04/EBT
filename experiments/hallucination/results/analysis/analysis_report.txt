@@ -1,0 +1,14 @@
+================================================================================
+ENERGY-BASED HALLUCINATION DETECTION - ANALYSIS REPORT
+================================================================================
+
+AUROC SCORES:
+----------------------------------------
+
+
+INTERPRETATION:
+----------------------------------------
+AUROC = 0.5: Random (no predictive power)
+AUROC > 0.6: Weak correlation
+AUROC > 0.7: Moderate correlation
+AUROC > 0.8: Strong correlation

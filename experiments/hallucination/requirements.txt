@@ -1,0 +1,6 @@
+# Additional requirements for hallucination experiments
+# (assumes base EBT environment is already set up)
+
+scikit-learn>=1.0.0
+scipy>=1.7.0
+matplotlib>=3.4.0

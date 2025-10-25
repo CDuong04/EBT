@@ -23,8 +23,10 @@ class EBT_NLP(L.LightningModule):
             self.hparams.update(vars(hparams))
         
         tokenizer = AutoTokenizer.from_pretrained(self.hparams.tokenizer, clean_up_tokenization_spaces = False)
+        self.tokenizer = tokenizer  # Store tokenizer for use in finetune mode
+        self.tokenizer.pad_token_id = tokenizer.eos_token_id  # Set pad token to eos token
         self.tokenizer_pad_token_id = tokenizer.eos_token_id # is token 0, was right padding things
-        
+
         self.vocab_size = len(tokenizer) # self.vocab_size = self.tokenizer.vocab_size caused errors since is smaller than len(self.tokenizer), is 50254 for neox-20b, len tokenizer is 50277 so decided to use that
         
         self.alpha = nn.Parameter(torch.tensor(float(self.hparams.mcmc_step_size)), requires_grad=self.hparams.mcmc_step_size_learnable)
